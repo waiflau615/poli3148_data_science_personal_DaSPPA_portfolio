@@ -1,0 +1,851 @@
+---
+title: "Lecture 9 in class notes (second half)"
+author: "Lau Wai Fung Raymond"
+date: "2023-11-9"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r, include=FALSE}
+knitr::opts_chunk$set(message = FALSE, fig.height=10, fig.width=15)
+```
+
+# 1_point reference
+
+## Required Package
+
+```{r}
+library(tidyverse)
+library(ggthemes)
+theme_set(theme_map())
+```
+
+## Case: The Spatial Patterns of Conflict Data
+
+Spatial data analysis on conflicts.
+
+-   [UCDP] Upsala Conflict Data Program: <https://ucdp.uu.se/>
+-   [ACLED] Armed Conflict Location & Event Data: <https://acleddata.com/>
+
+In this notebook, we explore the simpliest way to plot a global map visualizing the country-level frequencies of conflict severity.
+
+## Download UCDP Data
+
+```{r, eval=TRUE}
+# Location: https://ucdp.uu.se/downloads/
+
+download.file(
+  "https://ucdp.uu.se/downloads/ged/ged221-csv.zip",
+  destfile = "Lecture_09/data/ged221-csv.zip")
+
+# Decompress the downloaded ZIP file
+unzip("Lecture_9/data/ged221-csv.zip", exdir = "Lecture_9/data")
+
+# Codebook available on the website
+```
+
+## Load the Conflict Data
+
+```{r}
+d = read_csv("Lecture_9/data/GEDEvent_v22_1.csv")
+names(d)
+```
+
+## Plot Events on a Map
+
+In our first task of spatial data analysis, we plot individual conflict events on a map
+
+Create a dataframe named `d_event_2021` that contains all events in the year of 2021
+
+```{r}
+d_event_2021 = d |> filter(year == 2021)
+```
+
+## Load the World Map
+
+```{r}
+world = map_data("world")
+
+names(world)
+# Summary statistics
+summary(world)
+
+# Problem: Max. longitude > 180! Remove those
+world = world |> filter(long <= 180)
+```
+
+```{r}
+world_china = world |> 
+  filter(region == "China")
+
+world_china |>
+  ggplot() +
+  geom_point(aes(x = long, y = lat))
+```
+
+Plot the world map
+
+```{r, fig.width=15, fig.height=12}
+world |>
+  ggplot(aes(x = long, y = lat)) +
+  geom_map(
+    map = world,
+    aes(map_id = region),
+    color = "white", fill = "gray", linewidth = 0.1
+  )
+```
+
+**Add map projection**: The earth is not a flat plane. When we draw maps, we "project" the non-flat plane to a 2D flat plane. There are multiple ways through which we can do this projection. For example:
+
+```{r, fig.width=15, fig.height=12}
+world |>
+  ggplot(aes(x = long, y = lat)) +
+  geom_map(
+    map = world,
+    aes(map_id = region),
+    color = "white", fill = "gray", linewidth = 0.1
+  ) +
+  coord_map()
+```
+
+There are a variety of projections available. You may choose what you like (for pragmatic and aethetic purposes.
+
+```{r, fig.width=15, fig.height=12}
+world |>
+  ggplot(aes(x = long, y = lat)) +
+  geom_map(
+    map = world,
+    aes(map_id = region),
+    color = "white", fill = "gray", linewidth = 0.1
+  ) +
+  coord_map("moll")
+
+world |>
+  ggplot(aes(x = long, y = lat)) +
+  geom_map(
+    map = world,
+    aes(map_id = region),
+    color = "white", fill = "gray", linewidth = 0.1
+  ) +
+  coord_map("gilbert")
+
+world |>
+  ggplot(aes(x = long, y = lat)) +
+  geom_map(
+    map = world,
+    aes(map_id = region),
+    color = "white", fill = "gray", linewidth = 0.1
+  ) +
+  coord_map("orth")
+```
+
+## Plot Conflict Events as Points on the map
+
+Let's plot the events as points on the map.
+
+```{r}
+ggplot() +
+  geom_point(data = d_event_2021, aes(x = longitude, y = latitude))
+```
+
+### Stack the points onto the map
+
+```{r, fig.width=15, fig.height=12}
+world |>
+  ggplot(aes(x = long, y = lat)) +
+  geom_map(
+    map = world,
+    aes(map_id = region),
+    color = "white", fill = "gray", linewidth = 0.1
+  ) +
+  # Below: Stack a layer onto the map
+  geom_point(data = d_event_2021, aes(x = longitude, y = latitude)) +
+  coord_map()
+```
+
+### Make the Plot Prettier
+
+```{r, fig.width=15, fig.height=12}
+world |>
+  ggplot(aes(x = long, y = lat)) +
+  geom_map(
+    map = world,
+    aes(map_id = region),
+    color = "white", fill = "gray", linewidth = 0.1
+  ) +
+  geom_point(
+    data = d_event_2021, 
+    aes(x = longitude, y = latitude),
+    alpha = 0.3
+    ) +
+  coord_map()
+```
+
+## Plot Conflict Mortality
+
+Use number of deaths as size of points.
+
+First, we need to calculate total number of deaths
+
+```{r}
+d_event_2021 = d_event_2021 |>
+  mutate(Deaths = deaths_a + deaths_b + 
+           deaths_civilians + deaths_unknown)
+
+summary(d_event_2021$Deaths)
+
+d_event_2021 |>
+  ggplot() +
+  geom_density(aes(x = Deaths)) +
+  theme_bw() +
+  scale_x_sqrt()
+```
+
+```{r, fig.width=15, fig.height=12}
+world |>
+  ggplot(aes(x = long, y = lat)) +
+  geom_map(
+    map = world,
+    aes(map_id = region),
+    color = "white", fill = "gray", size = 0.1
+  ) +
+  geom_point(
+    data = d_event_2021, 
+    aes(x = longitude, y = latitude, size = Deaths),
+    alpha = 0.3
+    ) +
+  coord_map() +
+  theme(legend.position = "bottom")
+```
+
+How to make the figure more informative? We start by taking logarithm of the `Death` variable. Apparently, the distribution of mortality is so skewed that we are not seeing meaning variations.
+
+```{r, fig.width=12, fig.height=8}
+world |>
+  ggplot(aes(x = long, y = lat)) +
+  geom_map(
+    map = world,
+    aes(map_id = region),
+    color = "white", fill = "gray", linewidth = 0.1
+  ) +
+  geom_point(
+    data = d_event_2021, 
+    aes(x = longitude, y = latitude, size = log(Deaths+1)),
+    alpha = 0.1
+    ) +
+  coord_map() +
+  theme(legend.position = "bottom")
+
+# Q: Why log(Deaths**+1**) ?
+```
+
+Then, we use a more informative color scheme.
+
+```{r, fig.width=12, fig.height=8}
+world |>
+  ggplot(aes(x = long, y = lat)) +
+  geom_map(
+    map = world,
+    aes(map_id = region),
+    color = "white", fill = "gray", linewidth = 0.1
+  ) +
+  geom_point(
+    data = d_event_2021, 
+    aes(x = longitude, y = latitude, 
+        size = log(Deaths+1), color = log(Deaths+1)),
+    alpha = 0.1
+    ) +
+  scale_color_viridis_c(direction = -1, option = "A") +
+  coord_map() +
+  theme(legend.position = "bottom")
+```
+
+What we have drawn in this notebook are called "**bubble maps**" --- for obvious reasons.
+
+## Exercise: Conflict in Africa
+
+The current world map gives us an overview of conflicts in the world. What draws our attention is that Africa is an area where lots of conflict happen. As an after-class exercise, write code to plot a map of conflicts in Africa.
+
+# 2_area
+
+## Introduction
+
+This note project folder demonstrate the basics of spatial data analysis with R.
+
+## Required Package
+
+```{r}
+library(tidyverse)
+library(ggthemes)
+theme_set(theme_map())
+```
+
+## Load the Conflict Data
+
+```{r}
+d = read_csv("Lecture_9/data/GEDEvent_v22_1.csv")
+names(d)
+```
+
+## Map Inter-Country Variation
+
+Draw a world map featuring the variation of conflicts among countries in the year of 2021.
+
+### Put together your data
+
+Create a dataframe named `d_country_2021` that summarizes the number of conflicts in each country in the year of 2021.
+
+```{r}
+d_country_2021 = d |>
+  filter(year == 2021) |>
+  group_by(country, country_id, region) |>
+  summarise(
+    n_conflict = n()
+  )
+
+d_country_2021 = d_country_2021 |> arrange(-n_conflict)
+```
+
+## Load the World Map
+
+```{r}
+world = map_data("world")
+
+names(world)
+
+# Summary statistics
+summary(world)
+
+# Problem: Max. longitude > 180! Remove those
+world = world |> filter(long <= 180)
+```
+
+```{r}
+# Plot the world map
+world |>
+  ggplot(aes(x = long, y = lat)) +
+  geom_map(
+    map = world,
+    aes(map_id = region),
+    color = "white", fill = "gray", size = 0.1
+  ) +
+  coord_map()
+
+```
+
+## Merge Data with the World Map
+
+```{r}
+world_m = world |>
+  left_join(d_country_2021, by = c("region" = "country"))
+```
+
+Check what the merged data look like.
+
+## Now, Visualize Conflict Data on a Map
+
+Color the countries with the number of conflicts in 2021.
+
+```{r}
+world_m |>
+  ggplot(aes(x = long, y = lat)) +
+  geom_map(
+    map = world,
+    aes(map_id = region, fill = n_conflict),
+    color = "black", size = 0.1
+  ) +
+  coord_map()
+```
+
+## Make the Map More Informative
+
+Our next step is making the above map more informative
+
+### Change the color scheme
+
+Try the `scale_fill_viridis_c()` function. This should give you the most reliable color scheme.
+
++-----------+-----------------------------------------------------------------------------------------+
+| `option`  | A character string indicating the color map option to use. Eight options are available: |
+|           |                                                                                         |
+|           | -   "magma" (or "A")                                                                    |
+|           |                                                                                         |
+|           | -   "inferno" (or "B")                                                                  |
+|           |                                                                                         |
+|           | -   "plasma" (or "C")                                                                   |
+|           |                                                                                         |
+|           | -   "viridis" (or "D")                                                                  |
+|           |                                                                                         |
+|           | -   "cividis" (or "E")                                                                  |
+|           |                                                                                         |
+|           | -   "rocket" (or "F")                                                                   |
+|           |                                                                                         |
+|           | -   "mako" (or "G")                                                                     |
+|           |                                                                                         |
+|           | -   "turbo" (or "H")                                                                    |
++-----------+-----------------------------------------------------------------------------------------+
+
++-----------+------------------------------------------------------------------------------------------------------------------------------------------------+
+| direction | Sets the order of colors in the scale. If 1, the default, colors are ordered from darkest to lightest. If -1, the order of colors is reversed. |
++-----------+------------------------------------------------------------------------------------------------------------------------------------------------+
+
+```{r}
+{r}
+world_m |>
+  ggplot(aes(x = long, y = lat)) +
+  geom_map(
+    map = world,
+    aes(map_id = region, fill = n_conflict),
+    color = "white", size = 0.1
+  ) +
+  scale_fill_viridis_c(option = "A") +
+  coord_map()
+
+world_m |>
+  ggplot(aes(x = long, y = lat)) +
+  geom_map(
+    map = world,
+    aes(map_id = region, fill = n_conflict),
+    color = "white", size = 0.1
+  ) +
+  scale_fill_viridis_c(option = "B") +
+  coord_map()
+
+world_m |>
+  ggplot(aes(x = long, y = lat)) +
+  geom_map(
+    map = world,
+    aes(map_id = region, fill = n_conflict),
+    color = "white", size = 0.1
+  ) +
+  scale_fill_viridis_c(option = "B", direction = -1) +
+  coord_map()
+
+world_m |>
+  ggplot(aes(x = long, y = lat)) +
+  geom_map(
+    map = world,
+    aes(map_id = region, fill = n_conflict),
+    color = "white", size = 0.1
+  ) +
+  scale_fill_viridis_c(option = "D", direction = -1) +
+  coord_map()
+```
+
+Try the other specifications of color schemes.
+
+### Change the legend's name
+
+The most robust way to change the legend's name is the rename the variable.
+
+Note: When your variable name contains space, you should put "\`" around it.
+
+```{r}
+world_m |>
+  rename("Number of Conflicts" = "n_conflict") |>
+  ggplot(aes(x = long, y = lat)) +
+  geom_map(
+    map = world,
+    aes(map_id = region, fill = `Number of Conflicts`),
+    color = "white", size = 0.1
+  ) +
+  scale_fill_viridis_c(option = "B", direction = -1) +
+  coord_map()
+```
+
+### Transforming the Scale or Data
+
+The distribution of the conflict frequencies is so skewed that makes the differences of low-conflict countries indistinguishable. Transform the data or the scales to take into account the skewed data.
+
+```{r}
+world_m |>
+  rename("Number of Conflicts" = "n_conflict") |>
+  ggplot(aes(x = long, y = lat)) +
+  geom_map(
+    map = world,
+    aes(map_id = region, fill = `Number of Conflicts`),
+    color = "white", size = 0.1
+  ) +
+  scale_fill_viridis_c(option = "B", direction = -1, trans = "log") +
+  coord_map()
+```
+
+Or we can transform the data
+
+```{r}
+world_m |>
+  rename("Number of Conflicts" = "n_conflict") |>
+  ggplot(aes(x = long, y = lat)) +
+  geom_map(
+    map = world,
+    aes(map_id = region, fill = log(`Number of Conflicts`+1)),
+    color = "white", size = 0.1
+  ) +
+  scale_fill_viridis_c(option = "B", direction = -1) +
+  coord_map() +
+  theme(legend.position = "bottom")
+```
+
+## Choropleth Maps
+
+The maps we have drawn in this notebook are named "choropleth maps."
+
+"A choropleth map displays divided geographical areas or regions that are colored in relation to a numeric variable."
+
+# 3_sf
+
+## Introduction
+
+This note project folder demonstrate the basics of spatial data analysis with R.
+
+## Required Package
+
+```{r}
+library(tidyverse)
+library(ggthemes)
+theme_set(theme_map())
+
+library(sf)
+sf_use_s2(FALSE)
+library(rnaturalearth)
+library(rnaturalearthdata)
+```
+
+## Load the World Map
+
+Introducing a new format of geo-referenced data.
+
+```{r}
+world = ne_countries(scale = "medium", type = "map_units", returnclass = "sf")
+
+# world_2 = ne_countries(scale = "medium", type = "map_units", returnclass = "sf")
+# View(world_2 |> select(geometry))
+```
+
+```{r}
+world |> ggplot() + geom_sf()
+
+names(world)
+```
+
+## Load the Conflict Data
+
+```{r}
+d = read_csv("Lecture_9/data/GEDEvent_v22_1.csv")
+```
+
+## Get Point-Referenced Conflict Data in 2021
+
+```{r}
+d_event_2021 = d |> filter(year == 2021)
+```
+
+## Point Point-Referenced Conflict Data
+
+```{r}
+ggplot() + 
+  geom_sf(data = world) +
+  geom_point(data = d_event_2021, 
+             aes(x = longitude, y = latitude),
+             alpha = 0.2) 
+```
+
+Look at only conflicts in Africa.
+
+```{r}
+ggplot() + 
+  geom_sf(data = world |> filter(region_un == "Africa")) +
+  geom_point(data = d_event_2021 |> filter(region == "Africa"), 
+             aes(x = longitude, y = latitude),
+             alpha = 0.2) 
+```
+
+## Get Areal Conflict Data in 2021
+
+```{r}
+d_country_2021 = d |>
+  filter(year == 2021) |>
+  group_by(country_id, country, region) |>
+  summarise(
+    n_conflict = n()
+  )
+
+d_country_2021 = d_country_2021 |> arrange(-n_conflict)
+```
+
+## Merge Map with Data
+
+```{r}
+world_m = world |>
+  left_join(d_country_2021, by = c("sovereignt" = "country"))
+
+world_m |>
+  select(sovereignt, n_conflict)
+
+summary(world_m$n_conflict)
+```
+
+## Plot Country-Level Conflict Data
+
+```{r}
+ggplot() + 
+  geom_sf(data = world_m, aes(fill = n_conflict)) +
+  scale_fill_viridis_c(option = "B", direction = -1, trans = "log")
+```
+
+## Extension: Cartogram
+
+Reproject the map to change the sizes regions according to a variable of interest.
+
+Read this Wikipedia page for a detailed introduction of Cartogram: <https://en.wikipedia.org/wiki/Cartogram>
+
+Case: Draw Cartograms of conflicts in Africa
+
+*Personally, this is the most interesting type of map.*
+
+```{r}
+# install.packages("cartogram")
+library(cartogram)
+```
+
+```{r}
+# Cartogram by the number of conflict events in Africa
+world_m_africa = world_m |>
+  filter(region == "Africa") |>
+  mutate(geometry = st_transform(geometry, 3857)) # Specify a projection of the map. Essential
+
+# NEW: Fill in NA n_conflict
+summary(world_m_africa$n_conflict)
+
+# Re-project the map using the cartogram package
+world_m_africa_cart = world_m_africa |>
+  cartogram_cont(weight = "n_conflict")
+
+# Plot a choropleth map
+p1 <- ggplot(data = world_m_africa) +
+  geom_sf(aes(fill = n_conflict)) +
+  geom_sf_text(aes(label = sovereignt), size = 2, color = "white") +
+  scale_fill_viridis_c(option = "B", direction = -1, trans = "log")
+
+# Plot a cartogram
+p2 <- ggplot(data = world_m_africa_cart) +
+  geom_sf() +
+  geom_sf_label(aes(label = sovereignt))
+
+# use patchwork function    
+p1 + p2
+```
+
+```{r}
+# Diagrammic (Dorling) catograms -- some further extraction
+world_m_africa_cart_dorling = world_m_africa |>
+  cartogram_dorling(weight = "n_conflict")
+
+p3 <- ggplot(data = world_m_africa_cart_dorling) +
+  geom_sf(aes(fill = n_conflict)) +
+  geom_sf_text(aes(label = sovereignt), size = 2, color = "white") +
+  scale_fill_viridis_c(option = "B", direction = -1, trans = "log")
+
+p1 + p3
+```
+
+Read more: <https://r-charts.com/spatial/cartogram-ggplot2/>
+
+## Matching Countries' Names Smartly
+
+In cross-country analysis, what brings the most trouble is the matching of country identifiers. One thing that goes unnoticed in the above steps is that some contries "fell out" of the study siliently. We have a handy tool to help match countries from different datasets correctly.
+
+```{r}
+# Identify the problem. Which countries fell out of the study because their identifies do not match?
+# Use the anti_join function
+d_country_2021 |>
+  anti_join(world, c("country" = "sovereignt"))
+# Keep the entries that are NOT matched
+```
+
+```{r}
+# install.packages("countrycode")
+library(countrycode)
+```
+
+```{r}
+d_country_2021_t = d_country_2021 |>
+  mutate(
+    iso3c = countrycode(country, "country.name", "iso3c")
+  )
+
+# Check: There is a warning --> Some country names fail to be parsed.
+d_country_2021_t |>
+  select(country, iso3c) |>
+  filter(is.na(iso3c))
+
+# Remove the (North Yemen) part and redo it
+d_country_2021_t = d_country_2021 |>
+  mutate(
+    country = recode(country, "Yemen (North Yemen)" = "Yemen")
+  ) |>
+  mutate(
+    iso3c = countrycode(country, "country.name", "iso3c")
+  )
+```
+
+```{r}
+# Re-do the steps that join the world map and the data. This time, using ISO3C as the country identifier.
+
+world_m = world |>
+  left_join(d_country_2021_t, by = c("iso_a3" = "iso3c"))
+
+# Join continent's names using countrycode
+world_m = world_m |>
+  mutate(
+    continent = countrycode(iso_a3, "iso3c", "continent")
+  )
+```
+
+```{r}
+# Cartogram by the number of conflict events in Africa
+world_m_africa = world_m |>
+  filter(continent == "Africa") |>
+  mutate(geometry = st_transform(geometry, 3857))
+
+summary(world_m_africa$n_conflict)
+
+# # Impute ZEROS
+# world_m_africa = world_m_africa |>
+#   mutate(n_conflict = replace_na(n_conflict, 1))
+
+# summary(world_m_africa$n_conflict)
+
+# Re-project the map using the cartogram package
+world_m_africa_cart = world_m_africa |>
+  cartogram_cont(weight = "n_conflict")
+
+# Plot a choropleth map
+ggplot(data = world_m_africa) +
+  geom_sf(aes(fill = n_conflict)) +
+  geom_sf_label(aes(label = sovereignt)) +
+  scale_fill_viridis_c(option = "B", direction = -1, trans = "log")
+
+# Plot a cartogram
+ggplot(data = world_m_africa_cart) +
+  geom_sf() +
+  geom_sf_label(aes(label = iso_a3))
+
+# Diagrammic (Dorling) catograms
+world_m_africa_cart_dorling = world_m_africa |>
+  filter(!is.na(n_conflict)) |> 
+  # Note: The cartogram_dorling function will report error if NA values exist.
+  cartogram_dorling(weight = "n_conflict")
+
+ggplot(data = world_m_africa_cart_dorling) +
+  geom_sf() +
+  geom_sf_text(aes(label = sovereignt))
+```
+
+# 4_map_china
+
+## Required Packages
+
+```{r}
+library(tidyverse)
+library(ggthemes)
+theme_set(theme_map())
+
+library(sf)
+sf_use_s2(FALSE)
+
+# Display Chinese text with ggplot
+library(showtext)
+showtext_auto()
+```
+
+## Load China Map
+
+```{r}
+# https://github.com/xmc811/mapchina
+# install.packages("mapchina")
+library(mapchina)
+chinamap = china
+```
+
+## Plot China Map
+
+```{r}
+ggplot(data = chinamap) +
+  geom_sf()
+```
+
+```{r}
+ggplot(data = chinamap) +
+  geom_sf(aes(fill = Name_Province)) +
+  theme(legend.position = "none")
+```
+
+## Subsample
+
+```{r}
+hkmap = chinamap |> filter(Name_Province == "香港特别行政区")
+
+ggplot(data = hkmap) +
+  geom_sf() +
+  geom_sf_label(aes(label = Name_County))
+
+ggplot(data = hkmap) +
+  geom_sf()
+```
+
+## Merge Geographic Units
+
+```{r}
+# Merge into provincial-level units
+chinamap_province = chinamap |>
+  group_by(Code_Province, Name_Province) |>
+  summarise(
+    geometry = st_union(geometry)
+  ) 
+
+chinamap_province |>
+  ggplot() + geom_sf()
+
+chinamap_province |>
+  ggplot() + geom_sf() +
+  geom_sf_text(aes(label = Name_Province))
+```
+
+```{r}
+chinamap_prefecture = chinamap |>
+  mutate(
+    Code_Prefecture = Code_Perfecture,
+    Name_Prefecture_t = 
+      ifelse(is.na(Name_Perfecture), Name_Province, Name_Perfecture)
+  ) |>
+  group_by(Code_Perfecture, Name_Prefecture_t) |>
+  summarise(
+    geometry = st_union(geometry)
+    ) 
+
+chinamap_prefecture |>
+  ggplot() + geom_sf()
+```
+
+## Let's Have Some Fun
+
+Visualize China's Socioeconomic data with maps.
+
+```{r}
+d_china_province = readxl::read_excel("Lecture_9/data/China_province_data.xlsx")
+d_china_prefecture = readxl::read_excel("Lecture_9/data/China_prefecture_data.xlsx")
+```
+
+### Exercise
+
+-   Merge the provincial-level socioeconomic data with the provincial-level map.
+-   Draw Choropleths of socioeconomic indicators of interest.
+-   Draw Cartograms of socioeconomic indicators of interest.
+
+Does it change your understanding of the political economy of China?
+
+# 5_map_network
+
+#### continue in next lecture 10..
