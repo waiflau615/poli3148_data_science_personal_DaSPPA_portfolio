@@ -1,0 +1,297 @@
+---
+title: "Lecture 4 in-class note"
+author: "Lau Wai Fung Raymond"
+date: "`r Sys.Date()`"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### 0. Load the `tidyverse` package
+
+This section loads the packages we need in this lecture.
+
+```{r}
+library(tidyverse)
+```
+
+### 1. Import and Export V-dem data
+
+This section loads the VDEM dataset and describe its basic information.
+
+```{r}
+d <- read_csv("_DataPublic_/vdem/1984_2022/vdem_1984_2022_external.csv")
+```
+
+### 2. Select economic development indicators
+
+First, we look at the identifiers of the data.
+
+```{r}
+names(d)
+```
+
+We may use some alternative functions that provides information about the dataset. The `str()` provides not only variable names, but also their data types and a few example data points.
+
+```{r}
+str(d)
+```
+
+Usually, the second step of my data inquiry is having an overview of the *identifiers* of data points. In our case, the identifiers are country names, country IDs, and years. Using the `distinct()` function can effectively identify the distinct levels of *identifiers*
+
+```{r}
+d |> select(country_name, country_id, year) |>
+  distinct()
+```
+
+```{r}
+# Which countries are in this dataset
+d |> select(country_name) |> distinct()
+```
+
+```{r}
+d |> select(year) |> distinct()
+```
+
+Select both the country identifiers, GDP, and GDP per capita.
+
+```{r}
+d_gdp <- d |> 
+  select(country_name, country_id, year, e_gdp, e_gdppc)
+
+d_gdp
+```
+
+### Rename Column to Make Names Informative
+
+```{r}
+# d_gdp |> 
+#  rename("GDP" = "e_gdp", "GDP_per_capita" = "e_gdppc", 
+#         "Country" ="country_name", "ID" = "country_id", 
+#         "Year" = "year")
+
+
+d_gdp <- d_gdp |> 
+  rename("GDP" = "e_gdp", "GDP_per_capita" = "e_gdppc", 
+         "Country" ="country_name", "ID" = "country_id", 
+         "Year" = "year")
+
+d_gdp
+```
+
+### 4. `slice` Rows
+
+```{r}
+# Want country-years with highest GDP
+d_gdp |> 
+  slice_max(order_by = GDP, n = 10)
+```
+
+```{r}
+# Get countries-years with the lowest GDP
+d_gdp |> 
+  slice_min(order_by = GDP, n = 10)
+```
+
+```{r}
+set.seed(52)  #required to make research reproducible
+d_gdp |> slice_sample(n = 10)  # Sample 10 observations
+```
+
+```{r}
+d_gdp |> slice_sample(prop = 0.1)
+```
+
+### 5. Subset data by row
+
+```{r}
+# Want: 2000-2005 data
+d_gdp |> 
+  filter(Year >= 2000 & Year <= 2005)
+```
+
+```{r}
+# store the new dataset that include China GDP
+d_gdp_china <- d_gdp |> filter(Country == 'China')
+```
+
+```{r}
+# Want: 2000-2005 data from China
+d_gdp |> 
+  filter(Year >= 2000 & Year <= 2005) |> 
+  filter(Country == "China")
+```
+
+### 6. Arrange
+
+```{r}
+# Want: sort the data by GDP per capita
+d_gdp |> arrange(GDP_per_capita)
+```
+
+```{r}
+d_gdp |> arrange(-GDP_per_capita)
+```
+
+### 7. Perform (4) (5) (6) group by group: `group_by`, `ungroup`
+
+**Task:** Create a dataset that contains the year of the higest development level for each country/ region respectively.
+
+1.  Perform a data availability/ integrity check. Then aggregate the data into a new country-level dataset which contains the following indicators:
+    1.  Average development level from 1984 to 2022.
+
+    2.  Magnitude of growth from 1984 to 2022.
+
+```{r}
+# Want: For each country, we want year with the highest GDP
+d_gdp |>
+  group_by(Country) |>
+  slice_max(order_by = GDP, n = 1)
+```
+
+#### Perform a data availability/ integrity check
+
+```{r}
+# How many entries are there for each country
+d_gdp |>
+  group_by(Country) |>
+  count()
+# ?count
+```
+
+```{r}
+# Want: For each country, get the year when it has the worst GDP
+d_gdp |>
+  group_by(Country) |>
+  slice_min(order_by = GDP, n = 1)
+```
+
+### 8. Create new columns in the data: `group_by`, `mutate`, `ungroup`
+
+```{r}
+# simple command using mutate
+d_gdp |> mutate(New = 1)
+
+
+d_gdp |> mutate(New = GDP)
+
+d_gdp |> mutate(New = log(GDP))
+d_gdp |> mutate(New = log(GDP)+1)
+
+# Want: New column to be GDP relative to average GDP in the world 1984-2022
+d_gdp |> mutate(GDP_over_avg = GDP/ mean(GDP, na.rm = TRUE))
+
+# Want: New column to be GDP relative to average GDP of the country in the world 1984-2022
+d_gdp |>
+  group_by(Country) |>
+  mutate(GDP_over_avg = GDP/ mean(GDP, na.rm = TRUE))
+```
+
+**Task:** Add the following economic indicators to the data:
+
+1.  Country-year development level with reference to that of 1984.
+
+2.  Year-on-year economic growth.
+
+```{r}
+# Country-year development level with reference to that of 1984.
+d_gdp |> 
+  group_by(Country) |>
+  arrange(Year) |>
+  mutate(GDP_over_1984 = GDP/first(GDP)) |>
+  ungroup() |>
+  arrange(Country, Year)
+# first()
+```
+
+```{r}
+# Year-on-year economic growth
+# ?lag
+
+
+d_gdp |>
+  group_by(Country) |>
+  arrange(Year) |>
+  mutate(GDP_yoy_change = GDP - lag(GDP, n = 1)) |>
+  ungroup() |>
+  arrange(Country, Year)
+
+# mutate function only help adding new columns, not for number of rows
+```
+
+### 9. Summarize the data: `group_by`, `summarise`, `ungroup`
+
+```{r}
+# Want: Average GDP level of the world
+d_gdp |> summarise(gdp_average = mean(GDP, na.rm = TRUE),
+                   gdp_per_capita_average = mean(GDP_per_capita, na.rm = TRUE))
+```
+
+**Task:** Perform a data availability/ integrity check. Then aggregate the data into a new country-level dataset which contains the following indicators:
+
+1.  Average development level from 1984 to 2022.
+
+2.  Magnitude of growth from 1984 to 2022.
+
+```{r}
+# Data availability/ integrity check
+d_gdp |>
+  # Create a column that indicates whether the value is missing
+  mutate(GDP_missing = as.numeric(is.na(GDP)), .after = GDP) |>
+  group_by(Country) |>
+  summarise(N_GDP_missing = sum(GDP_missing))
+
+# ?is.numeric
+```
+
+```{r}
+# Average development level
+d_gdp |>
+  group_by(Country) |>
+  summarise(GDP_average = mean(GDP, na.rm = TRUE),
+            GDPpc_average = mean(GDP_per_capita, na.rm = TRUE))
+
+```
+
+```{r}
+# GDP growth and GDP per capita growth: comparing 2019 with 1984
+d_gdp |>
+  filter(Year >= 1984 & Year <= 2019) |>
+  group_by(Country) |>
+  arrange(Year) |>
+  summarise(GDP_growth_2020_1984 = (last(GDP) - first(GDP)) / first(GDP),
+            GDPpc_growth_2019_1984 = (last(GDP_per_capita) - first(GDP_per_capita))
+            /first(GDP_per_capita)) |>
+  ungroup() |>
+  arrange(Country)
+```
+
+### Details of Pipe operation notes refers to Lecture_4_note_rmd
+
+#### Why piping?
+
+Pipe is useful when you are conducting a series of operation on your data but want to minimize the number of intermediate outputs produced.
+
+```{r}
+# STEP 1: Subset variables
+d_gdp <- d |> select(country_name, country_id, year, e_gdp, e_gdppc)
+
+# STEP 2: Rename variables
+d_gdp_renamed <- d_gdp |>
+  rename("GDP" = "e_gdp", "GDP_per_capita" = "e_gdppc",
+         "Country" = "country_name", "ID" = "country_id",
+         "Year" = "year")
+
+# STEP 3: Filter down to China
+d_gdp_china <- d_gdp_renamed |> filter(Country == "China")
+
+# STEP 4: Filter down to 2000 - 2005
+d_gdp_china_2000_2005 <- d_gdp_china |> filter(Year >= 2000 & Year <= 2005)
+
+d_gdp_china_2000_2005
+```
