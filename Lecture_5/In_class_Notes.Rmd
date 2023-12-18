@@ -1,0 +1,128 @@
+---
+title: "Lecture 5 in-class notes"
+author: "Lau Wai Fung Raymond"
+date: "2023-10-05"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## In-Class Demo
+
+```{r}
+library(tidyverse)
+```
+
+```{r}
+d <- read_csv("_DataPublic_/vdem/1984_2022/vdem_1984_2022_external.csv")
+```
+
+## Example: The V-Dem Data
+
+Focus on the economic indicators: GDP and GDP per capita.
+
+```{r}
+d_gdp <- d |> 
+  select(country_text_id, year, e_gdp, e_gdppc) |>
+  rename("gdp" = "e_gdp", "gdppc" = "e_gdppc")
+
+d_gdp |> print(n = 3)
+```
+
+# Reshape a Table
+
+## Wide to Long: `pivot_longer`
+
+```{r}
+d_gdp_long <- d_gdp |>
+  pivot_longer(cols = c("gdp", "gdppc"), 
+               names_to = "variable", values_to = "value")
+
+d_gdp_long |> print(n = 4)
+```
+
+## Long to Wide: `pivot_wider`
+
+Task: Reverse the above `pivot_long` operation. \# turn the dataset back to the original shape
+
+```{r}
+d_gdp_wide_1 <- d_gdp_long |>
+  pivot_wider(names_from = "variable", values_from = "value")
+
+d_gdp_wide_1 |> print(n = 4)
+```
+
+## Long to Wide: `pivot_wider`
+
+Task: Make `year` the column variable.
+
+```{r}
+d_gdp_wide_2 <- d_gdp_long |>
+  pivot_wider(names_from = "year", values_from = "value")
+
+d_gdp_wide_2 |> print(n = 2)
+```
+
+## Long to Wide: `pivot_wider`
+
+Task: Make `country_text_id` the column variable.
+
+```{r}
+d_gdp_wide_3 <- d_gdp_long |>
+  pivot_wider(names_from = "country_text_id", values_from = "value")
+
+d_gdp_wide_3 |> print(n = 2)
+```
+
+## Why Do We Reshape Data?
+
+-   **For data cleaning:** Sometime it is much easier to clean the data after reshaping
+
+-   **For data visualization:** Some data visualization functions only take tables shaped in a specific way
+
+-   **For data sharing:** Sometimes you want to export the data for human readers (e.g., data coding/ labeling)
+
+*"But I am sure Excel can do the same thing!" It can do it for HUGE data reliably and fast. And the process is replicable.*
+
+### 1. Reshape the V-Dem dataset
+
+```{r}
+# Want: Each row contain country-year-variable
+
+d |> select(country_name) |> distinct()
+
+d_subset <- d |> select(country_name, year, starts_with("e_"))
+
+d_subset_long <- 
+  d_subset |> pivot_longer(cols = starts_with("e_"))
+# each of the columns transforms as in own row, 
+```
+
+```{r}
+# each rows become a columns i.e. year
+d_subset_wide_year <-
+  d_subset_long |> pivot_wider(names_from = year, values_from = value)
+```
+
+### 2. Stack multiple subsets of the V-Dem datasets
+
+```{r}
+d_VdemIndex <- read_csv("_DataPublic_/vdem/1984_2022/vdem_1984_2022_index.csv")
+```
+
+```{r}
+d_stack <- bind_cols(d, d_VdemIndex)
+```
+
+```{r}
+# Want: Stack two tables by rows?
+d_1945_1983 <- read_csv("_DataPublic_/vdem/1945_1983/vdem_1945_1983_external.csv")
+```
+
+```{r}
+d_1945_2022 <- bind_rows(d, d_1945_1983)
+
+d_1945_2022 |> select(year) |> distinct() |> arrange(year)
+```
