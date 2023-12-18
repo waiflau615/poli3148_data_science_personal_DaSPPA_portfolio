@@ -1,0 +1,276 @@
+---
+title: "Lecture 7 in class notes (first-half)"
+author: "Lau Wai Fung Raymond"
+date: "2023-10-30"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Our Task: Extend the "Health and Wealth" Analysis
+
+<https://www.gapminder.org/fw/world-health-chart/>
+
+> Hans Rosling shows that income and health go hand in hand. People live longer in richer countries. Or the other way around. Countries are richer where people live longer. There are no high income countries with a short life expectancy, and no low income countries with a long life expectancy. Still, there's a huge difference in life expectancy between countries on the same income level, depending on how the money is distributed and how it is used.
+
+# Data Preparation
+
+## Load the Data
+
+```{r}
+library(tidyverse)
+
+d_full <- bind_rows(
+  read_csv("_DataPublic_/vdem/1789_1827/vdem_1789_1827_external.csv"),
+  read_csv("_DataPublic_/vdem/1867_1905/vdem_1867_1905_external.csv"),
+  read_csv("_DataPublic_/vdem/1906_1944/vdem_1906_1944_external.csv"),
+  read_csv("_DataPublic_/vdem/1945_1983/vdem_1945_1983_external.csv"),
+  read_csv("_DataPublic_/vdem/1984_2022/vdem_1984_2022_external.csv")
+)
+```
+
+## Select Indicators of Interest
+
+-   Country-year identifiers `country_text_id` `year`
+
+-   Region `e_regiongeo`
+
+-   Wealth: GDP per capita `e_gdppc`
+
+-   Health: Life expectancy `e_pelifeex`
+
+-   Population: `e_mipopula` `e_sb_pop`
+
+-   Extension 1: Infant mortality rate (`e_peinfmor`)
+
+-   Extension 2: Democracy
+
+    -   Binary "democracy" indicator `e_boix_regime`
+
+    -   The Lexical index of Electoral Democracy `e_lexical_index`
+
+    -   Polity V scores (-10 to +10) `e_p_polity`
+
+## Select Indicators of Interest (con'd)
+
+```{r}
+d <- d_full |>
+  select(
+    country_text_id, year, 
+    e_regiongeo, e_pelifeex, e_gdppc, 
+    e_mipopula, e_wb_pop, e_peinfmor,
+    e_boix_regime, e_lexical_index, e_p_polity) |>
+  rename("region" = "e_regiongeo", 
+         "life_expectancy" = "e_pelifeex", 
+         "gdppc" = "e_gdppc",
+         "population_ClioInfra" = "e_mipopula", 
+         "population_WorldBank" = "e_wb_pop",
+         "infant_mortality" = "e_peinfmor",
+         "democracy_binary" = "e_boix_regime",
+         "democracy_lexical" = "e_lexical_index",
+         "democracy_polity5" = "e_p_polity") |>
+  filter(year >= 1800)
+
+saveRDS(d, "L7/data/wealth_and_health.rds")
+```
+
+## Take a Quick Look at the Data
+
+```{r}
+summary(d)
+# look at how many missing data exist in the variable select
+# if more than 50% are missing, doubt the data intergity
+```
+
+## Problem: Multiple Population Data Sources!
+
+We have two population data sources, with different coverage of years.
+
+## Multiple Population Data Sources
+
+Consistency? Check years that are available in both datasets.
+
+```{r}
+d_pop_overlap <- d |> select(country_text_id, year, starts_with("population_")) |> 
+  drop_na() # remove any rows that has at least one missing value
+print(d_pop_overlap, n = 3)
+unique(d_pop_overlap$year)
+cor(d_pop_overlap$population_ClioInfra, d_pop_overlap$population_WorldBank)
+```
+
+## Set a Rule to Merge the Two Population Columns
+
+-   Different units: Divide `population_WorldBank` by 1000 (so that the unit of population is "in thousands"
+
+-   Different coverage but almost perfect correlation
+
+    -   **For years that only one dataset has coverage, take the value from the dataset that has available data points.**
+
+    -   **For years that both datasets have coverage, take their** `mean`.
+
+That means, effectively, we are taking the `mean` and allow `na.rm = TRUE`. Think about it.
+
+## Merge the Two Population Columns
+
+Below is an implementation of the rule we have just set. The output of this step is a new variable called `population` which aggregate data from both sources.
+
+```{r}
+# STEP 1: "Harmonize" the units
+d <- d |> mutate(population_WorldBank = population_WorldBank / 1000)
+
+# STEP 2 Method 1: Slower but use only tidyverse functionality
+# [Slow! Not recommended!]
+# rowwise is extreme version of group+by syntax, tell R to check row by row
+d <- d |> rowwise() |>
+  mutate(population = mean(c_across(c("population_ClioInfra", "population_WorldBank")), na.rm = TRUE), .after = population_WorldBank) |>
+  ungroup()
+
+# STEP 2 Method 2: Faster but use a non-tidyverse function rowMeans() 
+# and create a temporary vector tmp_population, which I remove after use with rm()
+# [Faster !Recommended!]
+tmp_population <- d |> select(population_ClioInfra, population_WorldBank) |> rowMeans(na.rm = TRUE)
+d <- d |> mutate(population = !!(tmp_population), .after = population_WorldBank)
+
+rm(tmp_population)
+
+# Remove the columns we no longer need
+d <- d |> select(-population_ClioInfra, -population_WorldBank)
+
+```
+
+## Sanity Check
+
+```{r}
+summary(d %>% select(-country_text_id, -year, -region))
+```
+
+*Always watch out for when you see `NA`, especially when the number is non-trivial!*
+
+## Check Data Availability
+
+```{r}
+check_data_available <- d |> 
+  mutate(Available = (!is.na(life_expectancy) & !is.na(gdppc) & !is.na(population))) 
+# Check number of missing values by country-year
+table(check_data_available$Available, useNA = "always")
+
+check_data_available |> print(n = 3)
+```
+
+## Check Data Availability (con'd)
+
+```{r}
+check_data_available_wide <- check_data_available |>
+  select(country_text_id, year, Available) |>
+  pivot_wider(names_from = "country_text_id", values_from = "Available", 
+              names_prefix = "c_") |>
+  arrange(year)
+
+check_data_available_wide |> print(n = 3)
+```
+
+## Check Data Availability (con'd)
+
+```{r}
+# Check, for each year, the availability of each column
+check_data_available_by_column <- d |>
+  group_by(year) |>
+  summarise(
+    life_expectancy = sum(is.na(life_expectancy)),
+    gdppc = sum(is.na(gdppc)),
+    population = sum(is.na(population))
+  )
+  # summarise_at(vars(life_expectancy, gdppc, population), ~sum(!is.na(.))) 
+  # above is an alternative way to write the summarise() step
+
+check_data_available_by_column |> print(n = 3)
+```
+
+## Save Cleaned Data
+
+**OK. All look good! We are ready to create some beautiful data visualization.**
+
+```{r}
+dir.create("Lecture_7/data")
+saveRDS(d, "Lecture_7/data/wealth_and_health.rds")
+```
+
+# Data Viz Basics
+
+## Simplest Possible Visualization
+
+Plot a scatter plot with ALL the data points.
+
+```{r}
+d |> 
+  ggplot(aes(x = gdppc, y = life_expectancy)) + 
+  geom_point() +
+  labs(x = "GDP per capita", y = "Life Expectancy", 
+       title = "Wealth and Health in the World (1800-2019)",
+       caption = "By Lau Wai Fung. Data source: V-Dem v.13")
+```
+
+## Store Your First Data Visualization
+
+To make your nice data visualization stay. You can either (temporarily) save it in your R Environment, or save it as a file in your folder.
+
+```{r}
+# Store in R environment (temporary)
+p_all <- d |> 
+  ggplot(aes(x = gdppc, y = life_expectancy)) + 
+  geom_point() +
+  labs(x = "GDP per capita", y = "Life Expectancy", 
+       title = "Wealth and Health in the World (1800-2019)",
+       caption = "By Lau Wai Fung. Data source: V-Dem v.13")
+
+# Save plot as a .rds file in your folder
+dir.create("Lecture_7/figures")
+saveRDS(p_all, "Lecture_7/figures/welath_and_health_all.rds")
+
+# Save plot as a PDF file in your folder
+ggsave(filename = "Lecture_7/figures/welath_and_health_all.pdf", 
+       plot = p_all, width = 9, height = 4)
+
+# Save plot as a PNG file in your folder
+ggsave(filename = "Lecture_7/figures/welath_and_health_all.png", 
+       plot = p_all)
+```
+
+## Set Themes: `theme_bw`
+
+```{r, warning=FALSE, fig.width=9, fig.height=4}
+p_all + theme_bw()
+```
+
+## Set Themes: `theme_classic`
+
+```{r, warning=FALSE, fig.width=9, fig.height=4}
+p_all + theme_classic()
+```
+
+## Set Themes: `theme_minimal`
+
+```{r, warning=FALSE, fig.width=9, fig.height=4}
+p_all + theme_minimal()
+```
+
+## Other Fancy Themes: The Economist
+
+```{r, warning=FALSE, fig.width=9, fig.height=4}
+# install.packages("ggthemes") # install the package upon your first use.
+# Take a look at the package's website: https://yutannihilation.github.io/allYourFigureAreBelongToUs/ggthemes/
+library(ggthemes)
+p_all + theme_economist()
+# p_all + theme_economist_white()
+p_all + theme_economist_white()
+```
+
+## Other Fancy Themes: The WSJ
+
+```{r, warning=FALSE, fig.width=9, fig.height=4}
+p_all + theme_wsj(base_size = 6)
+```
