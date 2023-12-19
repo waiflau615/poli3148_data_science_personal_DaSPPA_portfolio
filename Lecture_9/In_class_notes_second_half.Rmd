@@ -338,7 +338,7 @@ world_m_africa_cart = world_m_africa |>
 ```
 
 ```{r}
-# Plot a cartogram (modified color and bigger text size)
+# Plot a cartogram (modified color and text size)
 ggplot(data = world_m_africa) +
   geom_sf(aes(fill = n_conflict)) +
   geom_sf_text(aes(label = sovereignt), size = 3.5, color = "cyan3") +
