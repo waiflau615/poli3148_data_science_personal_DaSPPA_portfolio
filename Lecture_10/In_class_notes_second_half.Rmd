@@ -423,6 +423,42 @@ Exercises:
 
 -   Get all money mentioned
 
+```{r}
+# create a new dataframe to do the above exercise
+d_final <- d 
+
+
+# Remove the link breaks and tabulation (\n \r \t)
+d_final$text <- lapply(d_final$text, function(x) str_replace_all(x, "[\n\r\t]", ""))
+
+# remove redundant spaces
+d_final$text <- lapply(d_final$text, function(x) str_replace_all(x, "\\s+", " "))
+
+
+# Remove procedural contents from speeches
+d_final$text <- lapply(d_final$text, function(x) str_replace_all(x, "(?is)procedure.*?end", ""))
+
+
+# Get the dates of speech
+
+```
+
+```{r}
+# Get the dates of speech
+d_date_final = d_final |>
+    mutate(
+    YEAR = str_sub(date_of_speech, start = -4, end = -1),
+    MONTH = str_sub(date_of_speech, start = 3, end = -5),
+    DAY = str_sub(date_of_speech, start = 1, end = 2)
+    )
+
+d_date_final <- d_date_final |>
+  mutate(
+    MONTH = str_remove_all(MONTH, "\\."),
+    DAY = str_remove_all(DAY, "\\.")
+  )
+```
+
 # 2_Tokenization_Exploratory Analysis
 
 ## Introduction
