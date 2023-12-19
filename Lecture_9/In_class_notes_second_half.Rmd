@@ -267,6 +267,83 @@ What we have drawn in this notebook are called "**bubble maps**" --- for obvious
 
 The current world map gives us an overview of conflicts in the world. What draws our attention is that Africa is an area where lots of conflict happen. As an after-class exercise, write code to plot a map of conflicts in Africa.
 
+```{r}
+# Required package
+library(tidyverse)
+library(ggthemes)
+theme_set(theme_map())
+
+library(sf)
+sf_use_s2(FALSE)
+library(rnaturalearth)
+library(rnaturalearthdata)
+```
+
+```{r}
+# load world map
+world = ne_countries(scale = "medium", type = "map_units", returnclass = "sf")
+
+world |> ggplot() + geom_sf()
+```
+
+```{r}
+# load the conflict data
+d = read_csv("Lecture_9/data/GEDEvent_v22_1.csv")
+```
+
+```{r}
+# conflct data in 2021
+d_event_2021 = d |> filter(year == 2021)
+
+# conflict data in Africa 
+ggplot() + 
+  geom_sf(data = world |> filter(region_un == "Africa")) +
+  geom_point(data = d_event_2021 |> filter(region == "Africa"), 
+             aes(x = longitude, y = latitude),
+             alpha = 0.2)
+```
+
+```{r}
+# Get Areal Conflict Data in Africa in 2021
+d_country_2021 = d |>
+  filter(year == 2021) |>
+  group_by(country_id, country, region) |>
+  summarise(
+    n_conflict = n()
+  )
+
+d_country_2021 = d_country_2021 |> arrange(-n_conflict)
+```
+
+```{r}
+# merge map with data
+world_m = world |>
+  left_join(d_country_2021, by = c("sovereignt" = "country"))
+
+library(cartogram)
+```
+
+```{r}
+# Cartogram by the number of conflict events in Africa
+world_m_africa = world_m |>
+  filter(region == "Africa") |>
+  mutate(geometry = st_transform(geometry, 3857))
+```
+
+```{r}
+# Re-project the map using the cartogram package
+world_m_africa_cart = world_m_africa |>
+  cartogram_cont(weight = "n_conflict")
+```
+
+```{r}
+# Plot a cartogram
+ggplot(data = world_m_africa) +
+  geom_sf(aes(fill = n_conflict)) +
+  geom_sf_text(aes(label = sovereignt), size = 3.5, color = "cyan3") +
+  scale_fill_viridis_c(option = "B", direction = -1, trans = "log")
+```
+
 # 2_area
 
 ## Introduction
@@ -366,25 +443,25 @@ Our next step is making the above map more informative
 
 Try the `scale_fill_viridis_c()` function. This should give you the most reliable color scheme.
 
-+-----------+-----------------------------------------------------------------------------------------+
-| `option`  | A character string indicating the color map option to use. Eight options are available: |
-|           |                                                                                         |
-|           | -   "magma" (or "A")                                                                    |
-|           |                                                                                         |
-|           | -   "inferno" (or "B")                                                                  |
-|           |                                                                                         |
-|           | -   "plasma" (or "C")                                                                   |
-|           |                                                                                         |
-|           | -   "viridis" (or "D")                                                                  |
-|           |                                                                                         |
-|           | -   "cividis" (or "E")                                                                  |
-|           |                                                                                         |
-|           | -   "rocket" (or "F")                                                                   |
-|           |                                                                                         |
-|           | -   "mako" (or "G")                                                                     |
-|           |                                                                                         |
-|           | -   "turbo" (or "H")                                                                    |
-+-----------+-----------------------------------------------------------------------------------------+
++------------+-----------------------------------------------------------------------------------------+
+| `option`   | A character string indicating the color map option to use. Eight options are available: |
+|            |                                                                                         |
+|            | -   "magma" (or "A")                                                                    |
+|            |                                                                                         |
+|            | -   "inferno" (or "B")                                                                  |
+|            |                                                                                         |
+|            | -   "plasma" (or "C")                                                                   |
+|            |                                                                                         |
+|            | -   "viridis" (or "D")                                                                  |
+|            |                                                                                         |
+|            | -   "cividis" (or "E")                                                                  |
+|            |                                                                                         |
+|            | -   "rocket" (or "F")                                                                   |
+|            |                                                                                         |
+|            | -   "mako" (or "G")                                                                     |
+|            |                                                                                         |
+|            | -   "turbo" (or "H")                                                                    |
++------------+-----------------------------------------------------------------------------------------+
 
 +-----------+------------------------------------------------------------------------------------------------------------------------------------------------+
 | direction | Sets the order of colors in the scale. If 1, the default, colors are ordered from darkest to lightest. If -1, the order of colors is reversed. |
