@@ -271,6 +271,7 @@ The current world map gives us an overview of conflicts in the world. What draws
 # Required package
 library(tidyverse)
 library(ggthemes)
+library(ggrepel)
 theme_set(theme_map())
 
 library(sf)
